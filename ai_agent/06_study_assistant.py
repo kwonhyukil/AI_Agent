@@ -40,6 +40,9 @@ SYSTEM_PROMPT = """
 규칙:
 - 사용자의 취향, 목표, 선호 과목은 facts에 저장하라.
 - 공부 할 일은 tasks에 저장하라.
+- 사용자가 할 일을 지워 달라고 하면 delete_task를 사용하라.
+- 사용자가 남은 할 일만 물으면 get_pending_tasks를 사용하라.
+- 사용자가 끝낸 할 일만 물으면 get_completed_tasks를 사용하라.
 - 사용자가 정리본 저장을 원하면 write_file을 사용하라.
 - 기억을 확인해야 하면 get_memory를 사용하라.
 - 답변은 짧고 쉬운 한국어로 하라.
@@ -78,6 +81,33 @@ tools = [
                 "task": {"type": "string", "description": "완료할 공부 할 일"},
             },
             "required": ["task"],
+        },
+    },
+    {
+        "name": "delete_task",
+        "description": "기존 공부 할 일을 삭제합니다.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "task": {"type": "string", "description": "삭제할 공부 할 일"},
+            },
+            "required": ["task"],
+        },
+    },
+    {
+        "name": "get_pending_tasks",
+        "description": "완료되지 않은 공부 할 일만 보여줍니다.",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "get_completed_tasks",
+        "description": "완료한 공부 할 일만 보여줍니다.",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
         },
     },
     {
@@ -167,8 +197,30 @@ def tool_complete_task(state: dict, task: str) -> str:
     return f"해당 할 일을 찾지 못했습니다: {task}"
 
 
+def tool_delete_task(state: dict, task: str) -> str:
+    for index, item in enumerate(state["tasks"]):
+        if item["task"] == task:
+            del state["tasks"][index]
+            return f"할 일 삭제 완료: {task}"
+    return f"삭제할 할 일을 찾지 못했습니다: {task}"
+
+
 def tool_get_memory(state: dict) -> str:
     return json.dumps(state, ensure_ascii=False, indent=2)
+
+
+def tool_get_pending_tasks(state: dict) -> str:
+    pending_tasks = [item["task"] for item in state["tasks"] if not item["done"]]
+    if not pending_tasks:
+        return "남은 할 일이 없습니다."
+    return json.dumps(pending_tasks, ensure_ascii=False, indent=2)
+
+
+def tool_get_completed_tasks(state: dict) -> str:
+    completed_tasks = [item["task"] for item in state["tasks"] if item["done"]]
+    if not completed_tasks:
+        return "완료한 할 일이 없습니다."
+    return json.dumps(completed_tasks, ensure_ascii=False, indent=2)
 
 
 def tool_write_file(path: str, content: str) -> str:
@@ -186,6 +238,12 @@ def execute_tool(state: dict, name: str, inputs: dict) -> str:
         return tool_add_task(state, inputs["task"])
     if name == "complete_task":
         return tool_complete_task(state, inputs["task"])
+    if name == "delete_task":
+        return tool_delete_task(state, inputs["task"])
+    if name == "get_pending_tasks":
+        return tool_get_pending_tasks(state)
+    if name == "get_completed_tasks":
+        return tool_get_completed_tasks(state)
     if name == "get_memory":
         return tool_get_memory(state)
     if name == "write_file":
@@ -285,4 +343,7 @@ if __name__ == "__main__":
     run_agent("내가 가장 좋아하는 과목은 과학이야. 기억해줘.")
     run_agent("오늘 할 일은 수학 문제 10개 풀기와 영어 단어 20개 외우기야. 기억해줘.")
     run_agent("영어 단어 20개 외우기는 끝났어. 지금 남은 할 일을 알려줘.")
+    run_agent("남은 할 일만 한 줄씩 간단히 보여줘.")
+    run_agent("끝낸 할 일만 보여줘.")
+    run_agent("수학 문제 10개 풀기는 할 일에서 지워줘.")
     run_agent("지금까지 기억한 내용을 study_summary.txt로 정리해서 저장해줘.")
